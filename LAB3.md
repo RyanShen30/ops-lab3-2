@@ -1,4 +1,4 @@
-# 实验 3 记录：第 <组号> 组
+# 实验 3 记录：第 2 组
 
 评分时依据本文件和 `runs/` 中的原始数据核对。本文件中的每一个数值，都须能在某个 `runs/<名字>/` 的文件中找到：表格用 `scripts/table.sh` 生成或从 `summary.md` 中复制后粘贴，其他数值注明出处（例如“`runs/b2-cpu/summary.md` 缺口表第 1 行”）。不要只贴截图。将 `<填写>` 替换为本组的内容。
 
@@ -8,21 +8,23 @@
 
 | 项 | 内容 |
 |---|---|
-| 小组 | 第 <组号> 组 |
-| 仓库地址 | <https://github.com/…> |
-| 主机 | <云厂商与规格名，例如某云的 2 vCPU 4 GB 通用型> |
-| CPU | <`lscpu` 的 Model name；vCPU 数> |
-| 内存与 swap | <`free -m` 的 total；`swapon --show` 的输出，没有 swap 就写“无”> |
-| 操作系统、内核、systemd | <`/etc/os-release` 的 PRETTY_NAME；`uname -r`；`systemctl --version` 第一行> |
-| cgroup | <`stat -fc %T /sys/fs/cgroup` 的输出；`cat /sys/fs/cgroup/cgroup.controllers` 的输出> |
-| Go、Prometheus、node_exporter | <`go version`；`tools/prometheus --version` 第一行；`tools/node_exporter --version` 第一行> |
-| 分核 | 实例：<如 1>；loadgen、lbd、scaler、Prometheus、node_exporter：<如 0> |
+| 小组 | 第 2 组 |
+| 仓库地址 | <https://github.com/RyanShen30/ops-lab3-2> |
+| 主机 | OpenStack Nova / KVM 虚拟机（4 vCPU，系统可见内存见下行） |
+| CPU | General Purpose Processor，4 vCPU |
+| 内存与 swap | 7556 MiB，swap 无 |
+| 操作系统、内核、systemd | Ubuntu 24.04.5 LTS，6.8.0-147-generic，systemd 255 (255.4-1ubuntu8.18) |
+| cgroup | `cgroup2fs`，控制器为 `cpuset cpu io memory hugetlb pids rdma misc` |
+| Go、Prometheus、node_exporter | Go 1.26.9 (linux/amd64)，Prometheus 3.13.4，node_exporter 1.12.1 |
+| 分核 | 任务 A 的单实例可用核 0–3，loadgen、Prometheus、node_exporter 使用核 0–1。B～D 按指导书将实例放在核 2，其余程序放在核 0–1。 |
+
+环境与工具版本见 [environment.txt](runs/task0/environment.txt)，`make build test` 的输出见 [build-test.log](runs/task0/build-test.log)。[targets.json](runs/task0/targets.json) 为任务 0 时的 Prometheus 目标列表，node 为 `up`，当时尚未启动的 enrolld 和 lbd 为 `down`。任务 A 用系统级 systemd 启动 `lab3-a`，服务进程以当前实验用户运行，使普通用户执行的 `run.sh` 可以检查并采集该 PID。
 
 ## 2. 任务 A：配额，节流与 OOM
 
 ### 2.1 A1 配额算术
 
-预测（测量之前写）：配额 0.5 核、周期 100 ms 时，1 个和 2 个线程跑满，每个线程每个周期运行多久、被停多久？本机上 enrolld 的 GOMAXPROCS 会是几，为什么？<填写>
+预测（测量之前写）：0.5 核、100 ms 周期提供合计 50 ms 的 CPU 时间。单线程跑满约运行 50 ms、被停 50 ms。两个线程在不同核同时跑满时，各运行约 25 ms、被停约 75 ms。预计实用约 0.50 核，几乎每个周期都被节流。本机可使用 4 个逻辑核，0.5 核配额向上取整为 1，Go 在可用逻辑核数至少为 2 时默认至少允许 2 个线程同时执行 Go 代码，所以预计 `GOMAXPROCS=2`。
 
 两次 `-burn` 的输出：
 
@@ -40,12 +42,12 @@
 本组写的节流比例查询（与 `deploy/queries-red.txt` 一致）：
 
 ```text
-throttle_ratio      <填写>
+throttle_ratio      sum(rate(cgroup_cpu_throttled_periods_total{job="enrolld"}[${window}])) / sum(rate(cgroup_cpu_periods_total{job="enrolld"}[${window}]))
 ```
 
 配额 100% 时测得的每请求 CPU：<填写> ms（`runs/<名字>/red.csv` 的 `cpu_ms_per_req`）；据此选定的到达率：<填写> 请求/秒，平均约 <填写> 核。
 
-预测（配额改为 50% 之前写）：平均用量低于配额，p99 会不会变？节流比例大约多少？<填写>
+预测（配额改为 50% 之前写）：平均用量约 0.4 核时，每 100 ms 平均需要 40 ms CPU 时间。默认泊松到达会使部分周期的请求集中到达，两个核并行执行时可能提前耗尽 50 ms 配额。预期客户端 p99 上升，p50 变化较小。粗略预估约两成周期发生节流。实际比例依赖到达波动、周期边界和上一周期留下的积压。提高配额或减少同时执行 Go 代码的线程数，预计能降低尾延迟。
 
 各次实验的数据（`scripts/table.sh runs/<名字> ok_rps p50_ms p99_ms server_p99_ms gomaxprocs cg_limit_cores cg_cpu_cores throttle_ratio throttled_s_per_s`，每次一张表）：
 
@@ -53,7 +55,7 @@ throttle_ratio      <填写>
 
 ### 2.3 A3 OOM
 
-预测（测量之前写）：`/api/report?mb=8&ms=500` 在到达率 10、20、30 时平均和最多各有几个在途请求？RSS 大约多少？在 `MemoryMax=200M` 下会在哪一个阶段被杀？<填写>
+预测（测量之前写）：按 Little’s Law，在系统尚未过载时，10、20、30 请求/秒对应平均约 5、10、15 个在途请求。考虑泊松波动，20 秒窗口内的并发峰值粗估分别为 10～12、16～19、21～25 个。每个请求保留 8 MiB 约 0.5 秒，平均在用的请求内存为 40、80、120 MiB。若以 15 MiB 空载 RSS 粗估，仅计当前在途数据约为 55、95、135 MiB。不能在这几个数上直接判断 OOM。默认 `GOGC=100` 下堆增长目标粗略接近上一轮存活堆的两倍，未回收对象和暂未归还的页会抬高峰值。预计第一阶段撑住，第二阶段的内存峰值可能先触及 200 MiB 并触发 OOM，第三阶段风险更高。
 
 <粘贴三次实验的表格（`scripts/table.sh runs/<名字> ok_rps error_rate p99_ms inflight_avg report_inflight_max rss_max_mb heap_max_mb mem_current_max_mb mem_limit_mb`）>
 
