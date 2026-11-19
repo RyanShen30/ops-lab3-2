@@ -1,0 +1,31 @@
+2026-11-19T11:08:17+08:00
+MainPID=46484
+ControlGroup=/system.slice/lab3-a.service
+MemoryMax=209715200
+MemorySwapMax=0
+ActiveState=active
+
+cpu.max
+max 100000
+
+memory.max
+209715200
+
+memory.swap.max
+0
+
+memory.current
+3239936
+
+memory.events
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+
+/metrics
+process_resident_memory_bytes 9.23648e+06
+go_heap_objects_bytes 1.267408e+06
+cgroup_memory_current_bytes 3.760128e+06

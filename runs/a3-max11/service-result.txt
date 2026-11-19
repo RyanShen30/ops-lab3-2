@@ -1,0 +1,14 @@
+2026-11-19T11:12:26+08:00
+Result=success
+ExecMainStatus=0
+MemoryMax=209715200
+MemorySwapMax=0
+ActiveState=active
+
+memory.events
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
