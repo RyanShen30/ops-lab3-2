@@ -1,0 +1,5 @@
+# sum by (instance) (changes(process_start_time_seconds{job="instances"}[10m]))
+2026-11-20T14:51:33+08:00
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{"instance":"127.0.0.1:8103"},"value":[1795157493.745,"7"]},{"metric":{"instance":"127.0.0.1:8102"},"value":[1795157493.745,"7"]},{"metric":{"instance":"127.0.0.1:8101"},"value":[1795157493.745,"7"]},{"metric":{"instance":"127.0.0.1:8104"},"value":[1795157493.745,"0"]}]}}
+# sum(changes(process_start_time_seconds{job="instances"}[10m]))
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1795157493.750,"21"]}]}}
